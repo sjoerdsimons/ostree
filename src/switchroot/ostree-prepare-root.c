@@ -46,6 +46,12 @@
 
 #include "ostree-mount-util.h"
 
+typedef struct {
+  char *target;
+  char *osname;
+  char *bootcsum;
+} ostree_args;
+
 static char *
 read_proc_cmdline (void)
 {
@@ -74,12 +80,38 @@ out:
   return cmdline;
 }
 
-static char *
+static int
+copy_ostree_argument (const char *prefix,
+                      const char *start,
+                      const char *next,
+                      char **result)
+{
+  int len = strlen(prefix);
+
+  if (strncmp (start, prefix, len) != 0)
+    return 0;
+
+  start += len;
+
+  if (*start != '=')
+    return 0;
+
+  start++;
+
+  if (next)
+    *result = strndup (start, next - start);
+  else
+    *result = strdup (start);
+
+  return 1;
+}
+
+static ostree_args
 parse_ostree_cmdline (void)
 {
   char *cmdline = NULL;
   const char *iter;
-  char *ret = NULL;
+  ostree_args ret = { NULL, };
 
   cmdline = read_proc_cmdline ();
   if (!cmdline)
@@ -92,15 +124,11 @@ parse_ostree_cmdline (void)
       const char *next_nonspc = next;
       while (next_nonspc && *next_nonspc == ' ')
 	next_nonspc += 1;
-      if (strncmp (iter, "ostree=", strlen ("ostree=")) == 0)
-        {
-	  const char *start = iter + strlen ("ostree=");
-	  if (next)
-	    ret = strndup (start, next - start);
-	  else
-	    ret = strdup (start);
-	  break;
-        }
+
+      copy_ostree_argument ("ostree", iter, next, &ret.target);
+      copy_ostree_argument ("ostree.osname", iter, next, &ret.osname);
+      copy_ostree_argument ("ostree.bootcsum", iter, next, &ret.bootcsum);
+
       iter = next_nonspc;
     }
 
@@ -130,16 +158,35 @@ resolve_deploy_path (const char * root_mountpoint)
 {
   char destpath[PATH_MAX];
   struct stat stbuf;
-  char *ostree_target, *deploy_path;
+  ostree_args args;
+  char *deploy_path;
 
-  ostree_target = parse_ostree_cmdline ();
-  if (!ostree_target)
+  args = parse_ostree_cmdline ();
+  if (!args.target && (!args.bootcsum || !args.osname))
     errx (EXIT_FAILURE, "No OSTree target; expected ostree=/ostree/boot.N/...");
 
-  snprintf (destpath, sizeof(destpath), "%s/%s", root_mountpoint, ostree_target);
+  if (args.target)
+    {
+      snprintf (destpath, sizeof(destpath), "%s/%s", root_mountpoint, args.target);
+    }
+  else
+    {
+      int i;
+      for (i = 0; i < 2 ; i++)
+        {
+          snprintf (destpath, sizeof(destpath),
+                    "%s/ostree/boot.%d/%s/%s/0",
+                    root_mountpoint,
+                    i, args.osname, args.bootcsum);
+          if (lstat (destpath, &stbuf) == 0)
+            break;
+        }
+    }
+
   printf ("Examining %s\n", destpath);
   if (lstat (destpath, &stbuf) < 0)
     err (EXIT_FAILURE, "Couldn't find specified OSTree root '%s'", destpath);
+
   if (!S_ISLNK (stbuf.st_mode))
     errx (EXIT_FAILURE, "OSTree target is not a symbolic link: %s", destpath);
   deploy_path = realpath (destpath, NULL);

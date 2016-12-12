@@ -18,7 +18,8 @@
 [Unit]
 Description=OSTree Prepare OS/
 DefaultDependencies=no
-ConditionKernelCommandLine=ostree
+|ConditionKernelCommandLine=ostree
+|ConditionKernelCommandLine=ostree.bootcsum
 ConditionPathExists=/etc/initrd-release
 OnFailure=emergency.service
 After=initrd-switch-root.target
