@@ -1122,28 +1122,6 @@ _ostree_sysroot_join_lines (GPtrArray  *lines)
 }
 
 static gboolean
-parse_kernel_commandline (OstreeKernelArgs  **out_args,
-                          GCancellable       *cancellable,
-                          GError            **error)
-{
-  gboolean ret = FALSE;
-  g_autoptr(GFile) proc_cmdline = g_file_new_for_path ("/proc/cmdline");
-  g_autofree char *contents = NULL;
-  gsize len;
-
-  if (!g_file_load_contents (proc_cmdline, cancellable, &contents, &len, NULL,
-                             error))
-    goto out;
-
-  g_strchomp (contents);
-
-  ret = TRUE;
-  *out_args = _ostree_kernel_args_from_string (contents);
- out:
-  return ret;
-}
-
-static gboolean
 find_booted_deployment (OstreeSysroot       *self,
                         GPtrArray           *deployments,
                         OstreeDeployment   **out_deployment,
@@ -1174,14 +1152,8 @@ find_booted_deployment (OstreeSysroot       *self,
       root_stbuf.st_ino == self_stbuf.st_ino)
     { 
       guint i;
-      const char *bootlink_arg;
-      __attribute__((cleanup(_ostree_kernel_args_cleanup))) OstreeKernelArgs *kernel_args = NULL;
-      
-      if (!parse_kernel_commandline (&kernel_args, cancellable, error))
-        goto out;
-      
-      bootlink_arg = _ostree_kernel_args_get_last_value (kernel_args, "ostree");
-      if (bootlink_arg)
+      g_autoptr (GFile) booted = g_file_new_for_path ("/run/ostree-booted");
+      if (g_file_query_exists (booted, NULL))
         {
           for (i = 0; i < deployments->len; i++)
             {
