@@ -28,6 +28,7 @@
 #include "ostree-sysroot-private.h"
 #include "ostree-deployment-private.h"
 #include "ostree-bootloader-uboot.h"
+#include "ostree-bootloader-sd-boot.h"
 #include "ostree-bootloader-syslinux.h"
 #include "ostree-bootloader-grub2.h"
 
@@ -1087,6 +1088,15 @@ _ostree_sysroot_query_bootloader (OstreeSysroot     *sysroot,
       if (!_ostree_bootloader_query (ret_loader, &is_active, cancellable, error))
         goto out;
     }
+
+  if (!is_active)
+    {
+      g_object_unref (ret_loader);
+      ret_loader = (OstreeBootloader*)_ostree_bootloader_sd_boot_new (sysroot);
+      if (!_ostree_bootloader_query (ret_loader, &is_active, cancellable, error))
+        goto out;
+    }
+
   if (!is_active)
     g_clear_object (&ret_loader);
 
