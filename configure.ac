@@ -97,7 +97,7 @@ if test x$with_curl = xyes; then OSTREE_FEATURES="$OSTREE_FEATURES +libcurl"; fi
 dnl When bumping the libsoup-2.4 dependency, remember to bump
 dnl SOUP_VERSION_MIN_REQUIRED and SOUP_VERSION_MAX_ALLOWED in
 dnl Makefile.am
-SOUP_DEPENDENCY="libsoup-2.4 >= 2.39.1"
+SOUP_DEPENDENCY="libsoup-2.4 >= 2.42"
 AC_ARG_WITH(soup,
 	    AS_HELP_STRING([--with-soup], [Use libsoup @<:@default=yes@:>@]),
 	    [], [with_soup=$with_soup_default])
