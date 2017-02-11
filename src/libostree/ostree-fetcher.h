@@ -90,7 +90,10 @@ void _ostree_fetcher_set_cookie_jar (OstreeFetcher *self,
                                      const char    *jar_path);
 
 void _ostree_fetcher_set_proxy (OstreeFetcher *fetcher,
-                                const char    *proxy);
+                                const char    *proxy,
+                                const char    *proxy_user,
+                                const char    *proxy_password,
+                                gboolean       ntlm_auth);
 
 void _ostree_fetcher_set_client_cert (OstreeFetcher *fetcher,
                                       const char     *cert_path,

@@ -74,6 +74,9 @@ typedef struct {
 
   GError *oob_error;
 
+  char *proxy_user;
+  char *proxy_password;
+
 } ThreadClosure;
 
 typedef struct {
@@ -110,6 +113,13 @@ typedef struct {
   gpointer data;
   GDestroyNotify notify;
 } IdleClosure;
+
+typedef struct {
+  SoupURI *proxy_uri;
+  char *proxy_user;
+  char *proxy_password;
+  gboolean ntlm_auth;
+} ProxyData;
 
 struct OstreeFetcher
 {
@@ -169,6 +179,9 @@ thread_closure_unref (ThreadClosure *thread_closure)
       g_clear_pointer (&thread_closure->oob_error, g_error_free);
 
       g_slice_free (ThreadClosure, thread_closure);
+
+      g_free (thread_closure->proxy_user);
+      g_free (thread_closure->proxy_password);
     }
 }
 
@@ -290,8 +303,8 @@ on_authenticate (SoupSession *session, SoupMessage *msg, SoupAuth *auth,
                        "Invalid username or password for proxy '%s'", s);
         }
       else
-        soup_auth_authenticate (auth, soup_uri_get_user (uri),
-                                      soup_uri_get_password (uri));
+        soup_auth_authenticate (auth, thread_closure->proxy_user,
+                                      thread_closure->proxy_password);
     }
 }
 
@@ -299,18 +312,22 @@ static void
 session_thread_set_proxy_cb (ThreadClosure *thread_closure,
                              gpointer data)
 {
-  SoupURI *proxy_uri = data;
+  ProxyData *proxy_data = data;
 
-  g_object_set (thread_closure->session,
-                SOUP_SESSION_PROXY_URI,
-                proxy_uri, NULL);
+  if (proxy_data->proxy_uri)
+    g_object_set (thread_closure->session,
+                  SOUP_SESSION_PROXY_URI,
+                  proxy_data->proxy_uri, NULL);
+
+  if (proxy_data->ntlm_auth)
+    soup_session_add_feature_by_type (thread_closure->session,
+                                      SOUP_TYPE_AUTH_NTLM);
 
   /* libsoup won't necessarily pass any embedded username and password to proxy
    * requests, so we have to be ready to handle 407 and handle them ourselves.
    * See also: https://bugzilla.gnome.org/show_bug.cgi?id=772932
    * */
-  if (soup_uri_get_user (proxy_uri) &&
-      soup_uri_get_password (proxy_uri))
+  if (proxy_data->proxy_user && proxy_data->proxy_password)
     {
       g_signal_connect (thread_closure->session, "authenticate",
                         G_CALLBACK (on_authenticate), thread_closure);
@@ -679,7 +696,7 @@ _ostree_fetcher_constructed (GObject *object)
 
   http_proxy = g_getenv ("http_proxy");
   if (http_proxy != NULL)
-    _ostree_fetcher_set_proxy (self, http_proxy);
+    _ostree_fetcher_set_proxy (self, http_proxy, NULL, NULL, FALSE);
 
   /* FIXME Maybe implement GInitableIface and use g_thread_try_new()
    *       so we can try to handle thread creation errors gracefully? */
@@ -736,18 +753,50 @@ _ostree_fetcher_get_dfd (OstreeFetcher *fetcher)
   return fetcher->thread_closure->tmpdir_dfd;
 }
 
+static void
+free_proxy_data (ProxyData *d)
+{
+  soup_uri_free (d->proxy_uri);
+  g_free (d->proxy_user);
+  g_free (d->proxy_password);
+
+  g_slice_free (ProxyData, d);
+}
+
 void
 _ostree_fetcher_set_proxy (OstreeFetcher *self,
-                           const char    *http_proxy)
+                           const char    *http_proxy,
+                           const char    *proxy_user,
+                           const char    *proxy_password,
+                           gboolean       ntlm_auth)
 {
-  SoupURI *proxy_uri;
+  ProxyData *proxy_data;
 
   g_return_if_fail (OSTREE_IS_FETCHER (self));
   g_return_if_fail (http_proxy != NULL);
 
-  proxy_uri = soup_uri_new (http_proxy);
+  proxy_data = g_slice_new0 (ProxyData);
+  if (http_proxy)
+    {
+      proxy_data->proxy_uri = soup_uri_new (http_proxy);
+      if (!proxy_data->proxy_uri)
+        g_warning ("Invalid proxy URI '%s'", http_proxy);
+    }
 
-  if (!proxy_uri)
+  if (proxy_user)
+    {
+      proxy_data->proxy_user = g_strdup (proxy_user);
+      proxy_data->proxy_password = g_strdup (proxy_password);
+    }
+  else if (proxy_data->proxy_uri)
+    {
+      proxy_data->proxy_user = g_strdup (soup_uri_get_user (proxy_data->proxy_uri));
+      proxy_data->proxy_user = g_strdup (soup_uri_get_password (proxy_data->proxy_uri));
+    }
+
+  proxy_data->ntlm_auth = ntlm_auth;
+
+  if (!proxy_data->proxy_uri)
     {
       g_warning ("Invalid proxy URI '%s'", http_proxy);
     }
@@ -755,8 +804,8 @@ _ostree_fetcher_set_proxy (OstreeFetcher *self,
     {
       session_thread_idle_add (self->thread_closure,
                                session_thread_set_proxy_cb,
-                               proxy_uri,  /* takes ownership */
-                               (GDestroyNotify) soup_uri_free);
+                               proxy_data,  /* takes ownership */
+                               (GDestroyNotify) free_proxy_data);
     }
 }
 
