@@ -790,7 +790,7 @@ _ostree_fetcher_set_proxy (OstreeFetcher *self,
   else if (proxy_data->proxy_uri)
     {
       proxy_data->proxy_user = g_strdup (soup_uri_get_user (proxy_data->proxy_uri));
-      proxy_data->proxy_user = g_strdup (soup_uri_get_password (proxy_data->proxy_uri));
+      proxy_data->proxy_password = g_strdup (soup_uri_get_password (proxy_data->proxy_uri));
     }
 
   proxy_data->ntlm_auth = ntlm_auth;
