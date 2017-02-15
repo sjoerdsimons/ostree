@@ -329,6 +329,8 @@ session_thread_set_proxy_cb (ThreadClosure *thread_closure,
    * */
   if (proxy_data->proxy_user && proxy_data->proxy_password)
     {
+      thread_closure->proxy_user = g_strdup(proxy_data->proxy_user);
+      thread_closure->proxy_password = g_strdup(proxy_data->proxy_password);
       g_signal_connect (thread_closure->session, "authenticate",
                         G_CALLBACK (on_authenticate), thread_closure);
     }
@@ -756,7 +758,8 @@ _ostree_fetcher_get_dfd (OstreeFetcher *fetcher)
 static void
 free_proxy_data (ProxyData *d)
 {
-  soup_uri_free (d->proxy_uri);
+  if (d->proxy_uri)
+    soup_uri_free (d->proxy_uri);
   g_free (d->proxy_user);
   g_free (d->proxy_password);
 
@@ -773,7 +776,6 @@ _ostree_fetcher_set_proxy (OstreeFetcher *self,
   ProxyData *proxy_data;
 
   g_return_if_fail (OSTREE_IS_FETCHER (self));
-  g_return_if_fail (http_proxy != NULL);
 
   proxy_data = g_slice_new0 (ProxyData);
   if (http_proxy)
@@ -791,22 +793,15 @@ _ostree_fetcher_set_proxy (OstreeFetcher *self,
   else if (proxy_data->proxy_uri)
     {
       proxy_data->proxy_user = g_strdup (soup_uri_get_user (proxy_data->proxy_uri));
-      proxy_data->proxy_user = g_strdup (soup_uri_get_password (proxy_data->proxy_uri));
+      proxy_data->proxy_password = g_strdup (soup_uri_get_password (proxy_data->proxy_uri));
     }
 
   proxy_data->ntlm_auth = ntlm_auth;
 
-  if (!proxy_data->proxy_uri)
-    {
-      g_warning ("Invalid proxy URI '%s'", http_proxy);
-    }
-  else
-    {
-      session_thread_idle_add (self->thread_closure,
-                               session_thread_set_proxy_cb,
-                               proxy_data,  /* takes ownership */
-                               (GDestroyNotify) free_proxy_data);
-    }
+  session_thread_idle_add (self->thread_closure,
+                           session_thread_set_proxy_cb,
+                           proxy_data,  /* takes ownership */
+                           (GDestroyNotify) free_proxy_data);
 }
 
 void
