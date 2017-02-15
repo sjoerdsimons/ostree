@@ -329,6 +329,8 @@ session_thread_set_proxy_cb (ThreadClosure *thread_closure,
    * */
   if (proxy_data->proxy_user && proxy_data->proxy_password)
     {
+      thread_closure->proxy_user = g_strdup(proxy_data->proxy_user);
+      thread_closure->proxy_password = g_strdup(proxy_data->proxy_password);
       g_signal_connect (thread_closure->session, "authenticate",
                         G_CALLBACK (on_authenticate), thread_closure);
     }
