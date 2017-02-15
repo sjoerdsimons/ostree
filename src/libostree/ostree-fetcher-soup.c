@@ -798,17 +798,10 @@ _ostree_fetcher_set_proxy (OstreeFetcher *self,
 
   proxy_data->ntlm_auth = ntlm_auth;
 
-  if (!proxy_data->proxy_uri)
-    {
-      g_warning ("Invalid proxy URI '%s'", http_proxy);
-    }
-  else
-    {
-      session_thread_idle_add (self->thread_closure,
-                               session_thread_set_proxy_cb,
-                               proxy_data,  /* takes ownership */
-                               (GDestroyNotify) free_proxy_data);
-    }
+  session_thread_idle_add (self->thread_closure,
+                           session_thread_set_proxy_cb,
+                           proxy_data,  /* takes ownership */
+                           (GDestroyNotify) free_proxy_data);
 }
 
 void
