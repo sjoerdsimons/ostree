@@ -758,7 +758,8 @@ _ostree_fetcher_get_dfd (OstreeFetcher *fetcher)
 static void
 free_proxy_data (ProxyData *d)
 {
-  soup_uri_free (d->proxy_uri);
+  if (d->proxy_uri)
+    soup_uri_free (d->proxy_uri);
   g_free (d->proxy_user);
   g_free (d->proxy_password);
 
